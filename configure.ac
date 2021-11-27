@@ -1,6 +1,9 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT(access.c)
-AC_CONFIG_HEADER(config.h)
+AC_INIT
+AC_CONFIG_SRCDIR([access.c])
+AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIRS([m4])
+LT_INIT
 
 dnl AC_CMDSTDOUT_CPP(variable, command, headers)
 AC_DEFUN([AC_CMDSTDOUT_CPP],
@@ -9,7 +12,7 @@ AC_DEFUN([AC_CMDSTDOUT_CPP],
 #include "confdefs.h"
 [$3]
 EOF
-$1=`(eval "$ac_cpp conftest.$ac_ext") 2>&AC_FD_CC | $2`
+$1=`(eval "$ac_cpp conftest.$ac_ext") 2>&AS_MESSAGE_LOG_FD | $2`
 rm -f conftest*
 ])
 
@@ -77,7 +80,15 @@ fi
 
 dnl Checks for header files.
 AC_HEADER_DIRENT
-AC_HEADER_STDC
+m4_warn([obsolete],
+[The preprocessor macro `STDC_HEADERS' is obsolete.
+  Except in unusual embedded environments, you can safely include all
+  ISO C90 headers unconditionally.])dnl
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS(fcntl.h limits.h sys/ioctl.h sys/time.h unistd.h memory.h stdarg.h sys/cdefs.h)
 
@@ -91,7 +102,19 @@ dnl Checks for library functions.
 AC_TYPE_GETGROUPS
 AC_PROG_GCC_TRADITIONAL
 AC_FUNC_MMAP
-AC_TYPE_SIGNAL
+m4_warn([obsolete],
+[your code may safely assume C89 semantics that RETSIGTYPE is void.
+Remove this warning and the `AC_CACHE_CHECK' when you adjust the code.])dnl
+AC_CACHE_CHECK([return type of signal handlers],[ac_cv_type_signal],[AC_COMPILE_IFELSE(
+[AC_LANG_PROGRAM([#include <sys/types.h>
+#include <signal.h>
+],
+		 [return *(signal (0, 0)) (0) == 1;])],
+		   [ac_cv_type_signal=int],
+		   [ac_cv_type_signal=void])])
+AC_DEFINE_UNQUOTED([RETSIGTYPE],[$ac_cv_type_signal],[Define as the return type of signal handlers
+		    (`int' or `void').])
+
 
 if test "$ac_cv_type_signal" = void
 then
@@ -103,8 +126,7 @@ AC_CHECK_FUNCS(strerror strtol lstat setrlimit sigrelse sighold sigaction \
 sysconf setsid sigsetjmp)
 
 AC_CACHE_CHECK(for an abused getenv, es_cv_abused_getenv,
-AC_TRY_RUN(
-[
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
 changequote(,)
 char *foo = 0;
 char *foov[] = { "-a", "-bfoo", "bar" };
@@ -113,10 +135,8 @@ int fooc = (sizeof(foov) / sizeof(foov[0]));
 int getenv() { return *foo; }
 int main() { while (-1 != getopt(fooc, foov, "ab:")); exit(0); }
 changequote([,])
-], 
-es_cv_abused_getenv=no,
-[es_cv_abused_getenv=yes
-AC_DEFINE(ABUSED_GETENV)]))
+]])],[es_cv_abused_getenv=no],[es_cv_abused_getenv=yes
+AC_DEFINE(ABUSED_GETENV)],[]))
 
 if test "$es_cv_abused_getenv" = yes
 then
@@ -125,15 +145,11 @@ fi
 
 dnl Check to see if you can assign to a va_list
 AC_CACHE_CHECK(whether assignment to va_list ok?, es_cv_assign_va_list,
-AC_TRY_COMPILE(
-[#ifndef HAVE_STDARG_H
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#ifndef HAVE_STDARG_H
 choke me
 #else
 #include <stdarg.h>
-#endif],
-
-[va_list first, second; first = second; return 0;],
-es_cv_assign_va_list=yes, es_cv_assign_va_list=no))
+#endif]], [[va_list first, second; first = second; return 0;]])],[es_cv_assign_va_list=yes],[es_cv_assign_va_list=no]))
 if test "$es_cv_assign_va_list" = no
 then
 	AC_DEFINE(NO_VA_LIST_ASSIGN)
@@ -160,4 +176,5 @@ AC_SUBST(SIGFILES, $es_cv_sigfiles)
 
 AC_DEFINE_UNQUOTED(LIMIT_T, $es_cv_rlimit_t)
 
-AC_OUTPUT(Makefile)
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
