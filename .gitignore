@@ -10,6 +10,7 @@
 /aclocal.m4
 /compile
 /configure
+/configure~
 /depcomp
 /install-sh
 /missing
@@ -20,6 +21,8 @@ config.log
 config.status
 config.sub
 ltmain.sh
+libtool
+m4/
 
 # yacc
 
@@ -32,3 +35,7 @@ sigmsgs.c
 token.h
 es
 esdump
+
+# dev env
+/.vscode/
+/.envrc

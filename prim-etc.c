@@ -4,10 +4,16 @@
 
 #include "es.h"
 #include "prim.h"
+#include <stdio.h>
+
+#if HAVE_LIBREADLINE || READLINE
+#include <readline/history.h>
+#include <readline/readline.h>
 
 PRIM(keybind) {
 	return mklist(mkstr(str("%d",rl_parse_and_bind(str("%L",list," ")))),NULL);
 }
+#endif
 
 PRIM(result) {
 	return list;

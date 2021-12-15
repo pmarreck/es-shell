@@ -764,9 +764,16 @@ result es initial state built in `/bin/pwd on `/bin/date for <=$&version
 ####################################################################
 
 # truncate the history
-cp $home/.es_history $home/.es_history.old
-tail -n 1000 $home/.es_history.old > $home/.es_history
-rm -f $home/.es_history.old
+# Because this fails if home is initialized to / (as above)
+# and also when the file may not exist yet, added a test
+if {/bin/test -f $home/.es_history} {
+	cp $home/.es_history $home/.es_history.old
+	tail -n 1000 $home/.es_history.old > $home/.es_history
+	rm -f $home/.es_history.old
+} {
+	echo >[1=2] The es history file does not exist yet, so truncation was skipped.
+	echo >[1=2] home is set to $home
+}
 history = $home/.es_history
 
 

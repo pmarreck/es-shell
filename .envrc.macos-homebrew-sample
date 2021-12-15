@@ -1,0 +1,34 @@
+# The purpose of this file is to set environment variables for compiling on OS X
+# with the assumption that the user has installed Homebrew, the gnu dev toolchain
+# and the direnv tool: http://direnv.net/
+
+# Prepend paths in an idempotent way; may only work on bash
+prepend_path() {
+    # $1: path variable name
+    # $2: path to prepend
+    # ensure both arguments are set
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        echo "usage: prepend_path <name_of_path_var> <path_to_prepend>" >&2
+        return 1
+    fi
+    # ${1} is, for example, "PATH"
+    # ${!1} is the value of PATH (dereferenced)
+    local temp_path=${!1}
+    # remove any duplicate entries
+    temp_path="${temp_path//$2/}"
+    # replace any double colons with single ones
+    temp_path="${temp_path//::/:}"
+    # prepend the new entry
+    temp_path="$2:$temp_path"
+    # strip any trailing colons
+    temp_path="${temp_path%:}"
+    # export the final result
+    export ${1}="$temp_path"
+}
+prepend_path CPATH /opt/homebrew/include
+prepend_path LIBRARY_PATH /opt/homebrew/lib
+prepend_path LD_LIBRARY_PATH /opt/homebrew/lib
+prepend_path PATH /opt/homebrew/bin
+prepend_path PATH /opt/homebrew/sbin
+prepend_path MANPATH /opt/homebrew/share/
+prepend_path PKG_CONFIG_PATH /opt/homebrew/lib/pkgconfig

@@ -125,7 +125,6 @@ then
 	AC_DEFINE(VOID_SIGNALS)
 fi
 
-AC_FUNC_WAIT3
 AC_CHECK_FUNCS(strerror strtol lstat setrlimit sigrelse sighold sigaction \
 sysconf setsid sigsetjmp)
 
