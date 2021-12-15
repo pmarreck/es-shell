@@ -46,10 +46,10 @@
 #include <signal.h>
 #include <ctype.h>
 
-/* #if REQUIRE_STAT || REQUIRE_IOCTL */
+#if REQUIRE_STAT || REQUIRE_IOCTL || 1
 /* We need sys/types.h for the prototype of gid_t on Linux */
 #include <sys/types.h>
-/* #endif */
+#endif
 
 #if REQUIRE_IOCTL
 #include <sys/ioctl.h>
@@ -90,17 +90,7 @@ typedef volatile void noreturn;
 typedef void noreturn;
 #endif
 
-#if STDC_HEADERS
 # include <stdlib.h>
-#else
-extern noreturn exit(int);
-extern noreturn abort(void);
-extern long strtol(const char *num, char **end, int base);
-extern void *qsort(
-	void *base, size_t nmemb, size_t size,
-	int (*compar)(const void *, const void *)
-);
-#endif /* !STDC_HEADERS */
 
 #include <sys/wait.h>
 #include <time.h>
@@ -300,10 +290,12 @@ extern int getgroups(int, int *);
  *	terms of the W* forms.
  */
 
-#define	SIFSIGNALED(status)	(((status) & 0xff) != 0)
+#define SIFSTOPPED(status)      ((status) & 0x40)
+#define	SIFEXITED(status)	(!((status) & 0xff))
+#define	SIFSIGNALED(status)	(!SIFEXITED(status) && !SIFSTOPPED(status))
 #define	STERMSIG(status)	((status) & 0x7f)
 #define	SCOREDUMP(status)	((status) & 0x80)
-#define	SIFEXITED(status)	(!SIFSIGNALED(status))
 #define	SEXITSTATUS(status)	(((status) >> 8) & 0xff)
+
 
 

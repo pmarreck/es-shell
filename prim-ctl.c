@@ -78,9 +78,11 @@ PRIM(catch) {
 					retry = TRUE;
 					unblocksignals();
 				} else {
+		
 					unblocksignals();
 					throw(fromcatcher);
 				}
+	   
 			EndExceptionHandler
 
 		EndExceptionHandler

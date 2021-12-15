@@ -4,6 +4,7 @@
 
 #include "es.h"
 #include "prim.h"
+#include "term.h"
 
 #ifdef HAVE_SETRLIMIT
 # define BSD_LIMITS 1
@@ -12,12 +13,13 @@
 #endif
 
 #if BSD_LIMITS || BUILTIN_TIME
-#include <sys/time.h>
-#include <sys/resource.h>
-#if !HAVE_WAIT3
-#include <sys/times.h>
-#include <limits.h>
-#endif
+# include <time.h>
+# include <sys/time.h>
+# include <sys/resource.h>
+# if !HAVE_WAIT3
+#  include <sys/times.h>
+#  include <limits.h>
+# endif
 #endif
 
 #include <sys/stat.h>
@@ -43,13 +45,9 @@ PRIM(newpgrp) {
 }
 
 PRIM(background) {
-	int pid = efork(TRUE, TRUE);
+	int pid = efork(TRUE, TRUE, 0, list);
+	setpgid(pid, getpid());
 	if (pid == 0) {
-#if JOB_PROTECT
-		/* job control safe version: put it in a new pgroup. */
-		setpgrp(0, getpid());
-#endif
-		mvfd(eopen("/dev/null", oOpen), 0);
 		exit(exitstatus(eval(list, NULL, evalflags | eval_inchild)));
 	}
 	return mklist(mkstr(str("%d", pid)), NULL);
@@ -57,7 +55,7 @@ PRIM(background) {
 
 PRIM(fork) {
 	int pid, status;
-	pid = efork(TRUE, FALSE);
+	pid = efork(TRUE, FALSE, 0, list);
 	if (pid == 0)
 		exit(exitstatus(eval(list, NULL, evalflags | eval_inchild)));
 	status = ewaitfor(pid);
@@ -307,7 +305,7 @@ PRIM(time) {
 
 	gc();	/* do a garbage collection first to ensure reproducible results */
 	t0 = time(NULL);
-	pid = efork(TRUE, FALSE);
+	pid = efork(TRUE, FALSE, 0, lp);
 	if (pid == 0)
 		exit(exitstatus(eval(lp, NULL, evalflags | eval_inchild)));
 	status = ewait(pid, FALSE, &r);
@@ -332,7 +330,7 @@ PRIM(time) {
 	Ref(List *, lp, list);
 
 	gc();	/* do a garbage collection first to ensure reproducible results */
-	pid = efork(TRUE, FALSE);
+	pid = efork(TRUE, FALSE, 0, lp);
 	if (pid == 0) {
 		clock_t t0, t1;
 		struct tms tms;
@@ -342,7 +340,7 @@ PRIM(time) {
 			ticks = sysconf(_SC_CLK_TCK);
 
 		t0 = times(&tms);
-		pid = efork(TRUE, FALSE);
+		pid = efork(TRUE, FALSE, 0, lp);
 		if (pid == 0)
 			exit(exitstatus(eval(lp, NULL, evalflags | eval_inchild)));
 

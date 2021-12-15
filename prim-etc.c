@@ -5,6 +5,10 @@
 #include "es.h"
 #include "prim.h"
 
+PRIM(keybind) {
+	return mklist(mkstr(str("%d",rl_parse_and_bind(str("%L",list," ")))),NULL);
+}
+
 PRIM(result) {
 	return list;
 }
@@ -292,6 +296,7 @@ PRIM(resetterminal) {
  */
 
 extern Dict *initprims_etc(Dict *primdict) {
+	X(keybind);
 	X(echo);
 	X(count);
 	X(version);

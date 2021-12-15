@@ -65,6 +65,10 @@ extern char *mkstatus(int status) {
 
 /* printstatus -- print the status if we should */
 extern void printstatus(int pid, int status) {
+	if (tcgetpgrp(shell_tty) != shell_pgid) {
+		return;
+	}
+	
 	if (SIFSIGNALED(status)) {
 		const char *msg = sigmessage(STERMSIG(status)), *tail = "";
 		if (SCOREDUMP(status)) {
@@ -78,5 +82,6 @@ extern void printstatus(int pid, int status) {
 			else
 				eprint("%d: %s%s\n", pid, msg, tail);
 		}
+		return;
 	}
 }
