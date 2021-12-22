@@ -39,12 +39,10 @@ static int historyfd = -1; //fixme: outcomment for gnureadline
 int rl_meta_chars;	/* for editline; ignored for gnu readline */
 extern char *readline(const char *);
 extern void add_history(const char *);
-/* extern void clear_history(void); */
-extern const char *rl_readline_name;
+extern int read_history(const char *);
 extern int rl_reset_terminal(const char *);
 extern const char *rl_basic_word_break_characters;
 extern const char *rl_completer_quote_characters;
-void readhistory(char* file);
 
 #if ABUSED_GETENV
 static char *stdgetenv(const char *);
@@ -89,41 +87,47 @@ static void warn(char *s) {
  */
 
 /* loghistory -- write the last command out to a file */
-static void loghistory(const char *cmd, size_t len) { //fixme: outcomment for gnureadline
-	const char *s, *end;
-	if (history == NULL || disablehistory)
-		return;
-	if (historyfd == -1) {
-		historyfd = eopen(history, oAppend);
-		if (historyfd == -1) {
-			eprint("history(%s): %s\n", history, esstrerror(errno));
-			vardef("history", NULL, NULL);
-			return;
-		}
-	}
-	/* skip empty lines and comments in history */
-	for (s = cmd, end = s + len; s < end; s++)
-		switch (*s) {
-		case '#': case '\n':	return;
-		case ' ': case '\t':	break;
-		default:		goto writeit;
-		}
-	writeit:
-		;
-	/*
-	 * Small unix hack: since read() reads only up to a newline
-	 * from a terminal, then presumably this write() will write at
-	 * most only one input line at a time.
-	 */
-	ewrite(historyfd, cmd, len);
-}
+// static void loghistory(const char *cmd, size_t len) { //fixme: outcomment for gnureadline
+// 	const char *s, *end;
+// 	if (history == NULL || disablehistory)
+// 		return;
+// 	if (historyfd == -1) {
+// 		historyfd = eopen(history, oAppend);
+// 		if (historyfd == -1) {
+// 			eprint("history(%s): %s\n", history, esstrerror(errno));
+// 			vardef("history", NULL, NULL);
+// 			return;
+// 		}
+// 	}
+// 	/* skip empty lines and comments in history */
+// 	for (s = cmd, end = s + len; s < end; s++)
+// 		switch (*s) {
+// 		case '#': case '\n':	return;
+// 		case ' ': case '\t':	break;
+// 		default:		goto writeit;
+// 		}
+// 	writeit:
+// 		;
+// 	/*
+// 	 * Small unix hack: since read() reads only up to a newline
+// 	 * from a terminal, then presumably this write() will write at
+// 	 * most only one input line at a time.
+// 	 */
+// 	ewrite(historyfd, cmd, len);
+// }
 
 /* sethistory -- change the file for the history log */
 extern void sethistory(char *file) {
-	history = file;
+	if (historyfd != -1) {
+		close(historyfd);
+		historyfd = -1;
+	}
 #if HAVE_LIBREADLINE
-        read_history(file);
+	// Attempt to populate readline history with new history file.
+    read_history(file); // ignore errors - best effort
+	history = file;
 #else
+	history = file;
 	if (historyfd != -1) {
 		close(historyfd);
 		historyfd = -1;
@@ -235,7 +239,7 @@ static char *esgetenv(const char *name) {
 	List *value = varlookup(name, NULL);
 	if (value == NULL)
 		return NULL;
-	else { 
+	else {
 		char *export;
 		static Dict *envdict;
 		static Boolean initialized = FALSE;
@@ -347,9 +351,9 @@ void readhistory(char* file) {
 /* fdfill -- fill input buffer by reading from a file descriptor */
 static int fdfill(Input *in) {
 	long nread;
+	Boolean dolog = FALSE;
 #if READLINE
 	static char *lastinbuf = NULL;
-   	Boolean dolog;
 #endif
 	assert(in->buf == in->bufend);
 	assert(in->fd >= 0);
@@ -493,7 +497,7 @@ extern List *runinput(Input *in, int runflags) {
 		if (flags & eval_exitonfalse)
 			dispatch = mklist(mkstr("%exit-on-false"), dispatch);
 		varpush(&push, "fn-%dispatch", dispatch);
-	
+
 		repl = varlookup((flags & run_interactive)
 				   ? "fn-%interactive-loop"
 				   : "fn-%batch-loop",
@@ -501,7 +505,7 @@ extern List *runinput(Input *in, int runflags) {
 		result = (repl == NULL)
 				? prim("batchloop", NULL, NULL, flags)
 				: eval(repl, NULL, flags);
-	
+
 		varpop(&push);
 
 	CatchException (e)
