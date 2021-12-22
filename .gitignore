@@ -39,3 +39,6 @@ esdump
 # dev env
 /.vscode/
 /.envrc
+
+# crapple
+.DS_Store
