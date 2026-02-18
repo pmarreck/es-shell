@@ -45,3 +45,6 @@ version.h
 es
 esdump
 testrun
+
+# local tooling
+/.codescan/
