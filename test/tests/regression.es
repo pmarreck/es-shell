@@ -106,8 +106,8 @@ EOF
 	assert {~ `{%run notarealbinary >[2=1]} 'notarealbinary'*}
 
 	# https://github.com/wryun/es-shell/pull/255
-	local (fn %pathsearch {result ~})
-	assert {$es -c 'notarealbinary; true'}
+	local (fn %pathsearch {result /definitely/not/a/command})
+	assert {~ `` \n {$es -c 'notarealbinary; true' >[2=1]} *'/definitely/not/a/command'*}
 }
 
 # These tests are based on notes in the CHANGES file from the pre-git days.

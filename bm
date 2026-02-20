@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+list_iters="${BM_LIST_ITERS:-120}"
+extract_iters="${BM_EXTRACT_ITERS:-120}"
+threshold_pct="${BM_THRESHOLD_PCT:-15}"
+log_file="bench/match-bench.log"
+
+mkdir -p bench
+
+make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" >/dev/null
+
+run_case() {
+	local label="$1"
+	shift
+	local timing
+	local real user sys cpu
+	timing="$(mktemp "${TMPDIR:-/tmp}/es-bm.XXXXXX")"
+	TIMEFORMAT='%R %U %S'
+	{ time "$@" >/dev/null 2>/dev/null; } 2>"$timing"
+	read -r real user sys <"$timing"
+	rm -f "$timing"
+	if ! awk -v r="$real" -v u="$user" -v s="$sys" 'BEGIN {
+		ok = (r ~ /^[0-9]+(\.[0-9]+)?$/) && (u ~ /^[0-9]+(\.[0-9]+)?$/) && (s ~ /^[0-9]+(\.[0-9]+)?$/);
+		exit(ok ? 0 : 1);
+	}'; then
+		printf 'failed to parse timing for %s (real=%s user=%s sys=%s)\n' "$label" "$real" "$user" "$sys" >&2
+		exit 1
+	fi
+	cpu="$(awk -v u="$user" -v s="$sys" 'BEGIN { printf "%.6f", (u + s) }')"
+	printf '%s\t%s\t%s\t%s\n' "$label" "$real" "$user" "$cpu"
+}
+
+parse_prev() {
+	local label="$1"
+	local line="$2"
+	local value
+	value="$(awk -F '\t' -v target="$label" '$2 == target { print $6 }' <<<"$line")"
+	printf '%s' "$value"
+}
+
+compare_delta() {
+	local label="$1"
+	local prev="$2"
+	local now="$3"
+	local delta abs
+	if [[ -z "$prev" ]]; then
+		printf '  %s: no previous baseline\n' "$label"
+		return 0
+	fi
+	delta="$(awk -v old="$prev" -v new="$now" 'BEGIN {
+		if (old == 0) { print 0; exit }
+		printf "%.2f", ((new - old) / old) * 100
+	}')"
+	abs="$(awk -v d="$delta" 'BEGIN { if (d < 0) d = -d; printf "%.2f", d }')"
+	printf '  %s: prev=%ss now=%ss delta=%s%%\n' "$label" "$prev" "$now" "$delta"
+	awk -v a="$abs" -v t="$threshold_pct" 'BEGIN { exit (a >= t ? 1 : 0) }'
+}
+
+list_row="$(run_case listmatch ./es -p bench/match-perf.es listmatch "$list_iters")"
+extract_row="$(run_case extractmatches ./es -p bench/match-perf.es extractmatches "$extract_iters")"
+
+printf 'Benchmark results (cpu=user+sys)\n'
+printf '  %-15s real=%ss user=%ss cpu=%ss\n' \
+	"listmatch" \
+	"$(cut -f2 <<<"$list_row")" \
+	"$(cut -f3 <<<"$list_row")" \
+	"$(cut -f4 <<<"$list_row")"
+printf '  %-15s real=%ss user=%ss cpu=%ss\n' \
+	"extractmatches" \
+	"$(cut -f2 <<<"$extract_row")" \
+	"$(cut -f3 <<<"$extract_row")" \
+	"$(cut -f4 <<<"$extract_row")"
+
+timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+prev_line=""
+if [[ -f "$log_file" ]] && [[ -s "$log_file" ]]; then
+	prev_line="$(tail -n 2 "$log_file")"
+fi
+
+{
+	printf '%s\t%s\titers=%s\treal=%s\tuser=%s\tcpu=%s\n' \
+		"$timestamp" "listmatch" "$list_iters" \
+		"$(cut -f2 <<<"$list_row")" \
+		"$(cut -f3 <<<"$list_row")" \
+		"$(cut -f4 <<<"$list_row")"
+	printf '%s\t%s\titers=%s\treal=%s\tuser=%s\tcpu=%s\n' \
+		"$timestamp" "extractmatches" "$extract_iters" \
+		"$(cut -f2 <<<"$extract_row")" \
+		"$(cut -f3 <<<"$extract_row")" \
+		"$(cut -f4 <<<"$extract_row")"
+} >>"$log_file"
+
+printf 'Logged benchmark row(s) to %s\n' "$log_file"
+
+if [[ -n "$prev_line" ]]; then
+	prev_list="$(parse_prev listmatch "$prev_line" | sed 's/^cpu=//')"
+	prev_extract="$(parse_prev extractmatches "$prev_line" | sed 's/^cpu=//')"
+	now_list="$(cut -f4 <<<"$list_row")"
+	now_extract="$(cut -f4 <<<"$extract_row")"
+
+	printf 'Delta vs previous run (threshold=%s%%):\n' "$threshold_pct"
+	fail=0
+	if compare_delta listmatch "$prev_list" "$now_list"; then :; else fail=1; fi
+	if compare_delta extractmatches "$prev_extract" "$now_extract"; then :; else fail=1; fi
+	if [[ "$fail" -ne 0 ]]; then
+		printf 'benchmark delta exceeded threshold; investigate before accepting this run\n' >&2
+		exit 1
+	fi
+fi

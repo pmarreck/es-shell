@@ -41,6 +41,8 @@ test 'file types' {
 	ln -s regular symbolic
 	unwind-protect {
 		assert {access -f regular}
+		assert {!access -c regular}
+		assert {access -c /dev/null}
 		assert {access -l symbolic}
 		assert {!access -l regular}
 		assert {access -f symbolic}
