@@ -48,3 +48,4 @@ testrun
 
 # local tooling
 /.codescan/
+.DS_Store

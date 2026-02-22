@@ -68,16 +68,18 @@
 						gcc
 						gawk
 						gnumake
+						hyperfine
 						libtool
 						ncurses
+						openssl
 						pkg-config
 						procps
 						readline
 					];
 					shellHook = ''
-						export AWK=awk
+						export AWK=${pkgs.gawk}/bin/awk
 						export INSTALL=${pkgs.coreutils}/bin/install
-						export PATH=${pkgs.procps}/bin:$PATH
+						export PATH=${pkgs.gawk}/bin:${pkgs.procps}/bin:$PATH
 					'';
 				};
 			});

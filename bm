@@ -1,111 +1,145 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-list_iters="${BM_LIST_ITERS:-120}"
-extract_iters="${BM_EXTRACT_ITERS:-120}"
-threshold_pct="${BM_THRESHOLD_PCT:-15}"
-log_file="bench/match-bench.log"
+runs="${BM_RUNS:-5}"
+warmup="${BM_WARMUP:-1}"
+seed="${BM_SEED:-424242}"
+log_file="bench/algos-bench.log"
 
 mkdir -p bench
 
+usage() {
+	cat >&2 <<'USAGE'
+usage: bm [algorithm...]
+
+algorithms:
+  mandelbrot
+  base64
+  primes
+  strings
+  dprng
+USAGE
+	exit 2
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+	usage
+fi
+
+if ! command -v hyperfine >/dev/null 2>&1; then
+	echo "error: hyperfine is required (use nix develop -c ./bm)" >&2
+	exit 1
+fi
+
 make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" >/dev/null
-
-run_case() {
-	local label="$1"
-	shift
-	local timing
-	local real user sys cpu
-	timing="$(mktemp "${TMPDIR:-/tmp}/es-bm.XXXXXX")"
-	TIMEFORMAT='%R %U %S'
-	{ time "$@" >/dev/null 2>/dev/null; } 2>"$timing"
-	read -r real user sys <"$timing"
-	rm -f "$timing"
-	if ! awk -v r="$real" -v u="$user" -v s="$sys" 'BEGIN {
-		ok = (r ~ /^[0-9]+(\.[0-9]+)?$/) && (u ~ /^[0-9]+(\.[0-9]+)?$/) && (s ~ /^[0-9]+(\.[0-9]+)?$/);
-		exit(ok ? 0 : 1);
-	}'; then
-		printf 'failed to parse timing for %s (real=%s user=%s sys=%s)\n' "$label" "$real" "$user" "$sys" >&2
-		exit 1
-	fi
-	cpu="$(awk -v u="$user" -v s="$sys" 'BEGIN { printf "%.6f", (u + s) }')"
-	printf '%s\t%s\t%s\t%s\n' "$label" "$real" "$user" "$cpu"
-}
-
-parse_prev() {
-	local label="$1"
-	local line="$2"
-	local value
-	value="$(awk -F '\t' -v target="$label" '$2 == target { print $6 }' <<<"$line")"
-	printf '%s' "$value"
-}
-
-compare_delta() {
-	local label="$1"
-	local prev="$2"
-	local now="$3"
-	local delta abs
-	if [[ -z "$prev" ]]; then
-		printf '  %s: no previous baseline\n' "$label"
-		return 0
-	fi
-	delta="$(awk -v old="$prev" -v new="$now" 'BEGIN {
-		if (old == 0) { print 0; exit }
-		printf "%.2f", ((new - old) / old) * 100
-	}')"
-	abs="$(awk -v d="$delta" 'BEGIN { if (d < 0) d = -d; printf "%.2f", d }')"
-	printf '  %s: prev=%ss now=%ss delta=%s%%\n' "$label" "$prev" "$now" "$delta"
-	awk -v a="$abs" -v t="$threshold_pct" 'BEGIN { exit (a >= t ? 1 : 0) }'
-}
-
-list_row="$(run_case listmatch ./es -p bench/match-perf.es listmatch "$list_iters")"
-extract_row="$(run_case extractmatches ./es -p bench/match-perf.es extractmatches "$extract_iters")"
-
-printf 'Benchmark results (cpu=user+sys)\n'
-printf '  %-15s real=%ss user=%ss cpu=%ss\n' \
-	"listmatch" \
-	"$(cut -f2 <<<"$list_row")" \
-	"$(cut -f3 <<<"$list_row")" \
-	"$(cut -f4 <<<"$list_row")"
-printf '  %-15s real=%ss user=%ss cpu=%ss\n' \
-	"extractmatches" \
-	"$(cut -f2 <<<"$extract_row")" \
-	"$(cut -f3 <<<"$extract_row")" \
-	"$(cut -f4 <<<"$extract_row")"
 
 timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-prev_line=""
-if [[ -f "$log_file" ]] && [[ -s "$log_file" ]]; then
-	prev_line="$(tail -n 2 "$log_file")"
-fi
-
 {
-	printf '%s\t%s\titers=%s\treal=%s\tuser=%s\tcpu=%s\n' \
-		"$timestamp" "listmatch" "$list_iters" \
-		"$(cut -f2 <<<"$list_row")" \
-		"$(cut -f3 <<<"$list_row")" \
-		"$(cut -f4 <<<"$list_row")"
-	printf '%s\t%s\titers=%s\treal=%s\tuser=%s\tcpu=%s\n' \
-		"$timestamp" "extractmatches" "$extract_iters" \
-		"$(cut -f2 <<<"$extract_row")" \
-		"$(cut -f3 <<<"$extract_row")" \
-		"$(cut -f4 <<<"$extract_row")"
+	echo "## ${timestamp}"
+	echo "- runs: ${runs}"
+	echo "- warmup: ${warmup}"
+	echo "- seed: ${seed}"
+	echo
 } >>"$log_file"
 
-printf 'Logged benchmark row(s) to %s\n' "$log_file"
+run_case() {
+	local label="$1"
+	local bash_cmd="$2"
+	local es_cmd="$3"
+	local awk_cmd="${4:-}"
+	local report
 
-if [[ -n "$prev_line" ]]; then
-	prev_list="$(parse_prev listmatch "$prev_line" | sed 's/^cpu=//')"
-	prev_extract="$(parse_prev extractmatches "$prev_line" | sed 's/^cpu=//')"
-	now_list="$(cut -f4 <<<"$list_row")"
-	now_extract="$(cut -f4 <<<"$extract_row")"
+	report="$(mktemp "${TMPDIR:-/tmp}/es-bm-report.XXXXXX.md")"
 
-	printf 'Delta vs previous run (threshold=%s%%):\n' "$threshold_pct"
-	fail=0
-	if compare_delta listmatch "$prev_list" "$now_list"; then :; else fail=1; fi
-	if compare_delta extractmatches "$prev_extract" "$now_extract"; then :; else fail=1; fi
-	if [[ "$fail" -ne 0 ]]; then
-		printf 'benchmark delta exceeded threshold; investigate before accepting this run\n' >&2
-		exit 1
+	echo
+	echo "=== ${label} ==="
+
+	if [[ -n "$awk_cmd" ]]; then
+		hyperfine \
+			--warmup "$warmup" \
+			--runs "$runs" \
+			--command-name "es" "$es_cmd" \
+			--command-name "bash" "$bash_cmd" \
+			--command-name "awk" "$awk_cmd" \
+			--export-markdown "$report"
+	else
+		hyperfine \
+			--warmup "$warmup" \
+			--runs "$runs" \
+			--command-name "es" "$es_cmd" \
+			--command-name "bash" "$bash_cmd" \
+			--export-markdown "$report"
 	fi
+
+	cat "$report"
+	{
+		echo "### ${label}"
+		cat "$report"
+		echo
+	} >>"$log_file"
+	rm -f "$report"
+}
+
+declare -a algorithms
+if [[ "$#" -eq 0 ]]; then
+	algorithms=(mandelbrot base64 primes strings dprng)
+else
+	algorithms=("$@")
 fi
+
+for algorithm in "${algorithms[@]}"; do
+	case "$algorithm" in
+		mandelbrot)
+			w="${BM_MANDEL_WIDTH:-84}"
+			h="${BM_MANDEL_HEIGHT:-36}"
+			mi="${BM_MANDEL_MAXITER:-60}"
+			run_case \
+				"mandelbrot" \
+				"bash bench/es-vs-bash-algos.bash mandelbrot ${w} ${h} ${mi}" \
+				"./es -p bench/es-vs-bash-algos.es mandelbrot ${w} ${h} ${mi}" \
+				"awk -v width=${w} -v height=${h} -v maxiter=${mi} -f bench/mandelbrot.awk | wc -c >/dev/null"
+			;;
+		base64)
+			rows="${BM_B64_ROWS:-2000}"
+			rounds="${BM_B64_ROUNDS:-4}"
+			run_case \
+				"base64-roundtrip" \
+				"bash bench/es-vs-bash-algos.bash base64 ${rows} ${rounds} ${seed}" \
+				"./es -p bench/es-vs-bash-algos.es base64 ${rows} ${rounds} ${seed}" \
+				""
+			;;
+		primes)
+			limit="${BM_PRIME_LIMIT:-60}"
+			run_case \
+				"primes" \
+				"bash bench/es-vs-bash-algos.bash primes ${limit}" \
+				"./es -p bench/es-vs-bash-algos.es primes ${limit}" \
+				"awk -v limit=${limit} -f bench/primes.awk >/dev/null"
+			;;
+		strings)
+			tokens="${BM_STR_TOKENS:-1000}"
+			rounds="${BM_STR_ROUNDS:-20}"
+			run_case \
+				"strings" \
+				"bash bench/es-vs-bash-algos.bash strings ${tokens} ${rounds} ${seed}" \
+				"./es -p bench/es-vs-bash-algos.es strings ${tokens} ${rounds} ${seed}" \
+				"awk -v tokens=${tokens} -v rounds=${rounds} -v seed=${seed} -f bench/strings.awk >/dev/null"
+			;;
+		dprng)
+			count="${BM_DPRNG_COUNT:-80}"
+			run_case \
+				"dprng" \
+				"bash bench/es-vs-bash-algos.bash dprng ${count} ${seed}" \
+				"./es -p bench/es-vs-bash-algos.es dprng ${count} ${seed}" \
+				"awk -v mode=numbers -v count=${count} -v seed=${seed} -f bench/dprng.awk >/dev/null"
+			;;
+		*)
+			echo "unknown algorithm: ${algorithm}" >&2
+			usage
+			;;
+	esac
+done
+
+echo
+echo "Logged benchmark results to ${log_file}"
