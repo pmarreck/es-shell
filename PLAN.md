@@ -6,7 +6,7 @@ This repository is a fork of upstream `es`; `master` is the working branch.
 ## Open
 
 - [x] Commit `share/capture.es` and `test/tests/capture.es` after a clean out-of-tree build and full suite pass (54/54) (done 2026-10-14 16:50 EDT).
-- [ ] Retire Garnix (`garnix.yaml`, README badge) and complete Mechatron Prime CI coverage for the disabled GitHub Actions workflow: flake test check, target manifest, hook, badge, exact-commit result, documented native gaps.
+- [ ] Confirm the Mechatron Prime CI result for the CI migration commit and report coverage gaps to mechatron-prime; retired CI configs stay in place, disabled (context: docs/CI.md).
 - [ ] Add top-level `./build` and `./test` wrappers that run through `nix develop -c` and build out of tree (the shared checkout currently mixes macOS arm64 and Linux x86-64 objects, which breaks `make`).
 - [ ] Investigate and harden against host `AWK` overrides (e.g., `frawk`) in non-Nix local workflows.
 - [ ] Make `share/capture.es` run its helper with `bash -c` instead of `bash -lc`, so the login profile cannot leak stderr noise or state into captures (prove with a failing test using a noisy temporary HOME).
