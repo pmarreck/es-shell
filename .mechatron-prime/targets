@@ -1,0 +1,3 @@
+# Exact flake attributes Mechatron Prime CI builds for each pushed commit (x86_64 Linux worker).
+packages.x86_64-linux.default
+checks.x86_64-linux.test

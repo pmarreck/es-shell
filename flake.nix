@@ -54,8 +54,20 @@
 				es = es;
 			});
 
-			checks = forAllSystems ({ es, ... }: {
+			checks = forAllSystems ({ pkgs, es }: {
 				build = es;
+				# Runs the deterministic es test corpus against the freshly built binary.
+				test = es.overrideAttrs (old: {
+					pname = "es-test";
+					doCheck = true;
+					nativeCheckInputs = with pkgs; [ openssl procps ];
+					checkPhase = ''
+						runHook preCheck
+						make testrun
+						./es -ps < ./test/test.es $(find ./test/tests -type f | LC_ALL=C sort)
+						runHook postCheck
+					'';
+				});
 			});
 
 			devShells = forAllSystems ({ pkgs, ... }: {

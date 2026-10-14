@@ -9,6 +9,7 @@ This repository is a fork of upstream `es`; `master` is the working branch.
 - [ ] Retire Garnix (`garnix.yaml`, README badge) and complete Mechatron Prime CI coverage for the disabled GitHub Actions workflow: flake test check, target manifest, hook, badge, exact-commit result, documented native gaps.
 - [ ] Add top-level `./build` and `./test` wrappers that run through `nix develop -c` and build out of tree (the shared checkout currently mixes macOS arm64 and Linux x86-64 objects, which breaks `make`).
 - [ ] Investigate and harden against host `AWK` overrides (e.g., `frawk`) in non-Nix local workflows.
+- [ ] Make `share/capture.es` run its helper with `bash -c` instead of `bash -lc`, so the login profile cannot leak stderr noise or state into captures (prove with a failing test using a noisy temporary HOME).
 
 ## Recently completed
 
