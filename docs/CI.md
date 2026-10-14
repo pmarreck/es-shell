@@ -19,9 +19,11 @@ Neither one runs.
 - `garnix.yaml` configured Garnix CI, a hosted service that shut down on
   2026-07-15. With no service to read it, the file has no effect.
 
-## Coverage gaps
+## Supported platforms
 
-Mechatron Prime CI tests x86_64 Linux only. Until other runners exist,
-ARM64 Linux and macOS are neither built nor tested by CI, and no build
-artifacts are published. The flake still declares outputs for
-`aarch64-linux`, `aarch64-darwin` and `x86_64-darwin`.
+This fork supports Linux only for now; macOS is out of scope, a decision the
+BDFN (Benevolent Dictator For Now) made on 2026-10-14. Mechatron Prime CI
+builds and tests x86_64 Linux. ARM64 Linux is not yet tested, and CI does not
+publish build artifacts. The flake still declares macOS outputs, but nothing
+builds or tests them, so they may stop working. Re-enabling the GitHub Actions
+workflow would restore macOS and ARM64 runs if that decision changes.
